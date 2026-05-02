@@ -1,0 +1,36 @@
+name: Build luci-app-timecontrol IPK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Prepare build env
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-distutils
+
+      - name: Clone ImmortalWrt source
+        run: |
+          git clone --depth=1 -b openwrt-24.10 https://github.com/immortalwrt/immortalwrt.git immortalwrt
+          cd immortalwrt
+          cp -r ../luci-app-timecontrol package/
+
+      - name: Configure & Build IPK
+        run: |
+          cd immortalwrt
+          ./scripts/feeds update -a
+          ./scripts/feeds install -a
+          make defconfig
+          make package/luci-app-timecontrol/compile V=s -j$(nproc)
+
+      - name: Upload IPK
+        uses: actions/upload-artifact@main
+        with:
+          name: luci-app-timecontrol-ipk
+          path: immortalwrt/bin/packages/**/luci-app-timecontrol*.ipk
