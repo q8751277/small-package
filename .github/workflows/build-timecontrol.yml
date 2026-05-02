@@ -1,36 +1,35 @@
-name: Build luci-app-timecontrol IPK
-
-on:
-  workflow_dispatch:
+name: Build TimeControl IPK
+on: workflow_dispatch
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@main
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Prepare build env
+      - name: Prepare OpenWrt SDK
         run: |
-          sudo apt update
-          sudo apt install -y build-essential libncurses5-dev libncursesw5-dev zlib1g-dev gawk git gettext libssl-dev xsltproc rsync wget unzip python3 python3-distutils
+          sudo apt update && sudo apt install -y build-essential libncurses-dev gawk flex bison quilt libssl-dev xsltproc libxml-parser-perl mercurial bzr ecj cvs unzip git wget
+          # 下载适配你路由器架构的 OpenWrt SDK
+          wget https://downloads.immortalwrt.org/releases/24.10-SNAPSHOT/targets/mediatek/filogic/immortalwrt-sdk-24.10-SNAPSHOT-mediatek-filogic_gcc-13.3.0_musl.Linux-x86_64.tar.xz
+          tar -xf immortalwrt-sdk-*.tar.xz
+          cd $(ls -d immortalwrt-sdk-*/)
+          echo "SDK_PATH=$(pwd)" >> $GITHUB_ENV
 
-      - name: Clone ImmortalWrt source
+      - name: Compile the package
         run: |
-          git clone --depth=1 -b openwrt-24.10 https://github.com/immortalwrt/immortalwrt.git immortalwrt
-          cd immortalwrt
-          cp -r ../luci-app-timecontrol package/
-
-      - name: Configure & Build IPK
-        run: |
-          cd immortalwrt
+          cd ${{ env.SDK_PATH }}
+          # 把插件源码复制到 SDK 的 package 目录下
+          cp -r $GITHUB_WORKSPACE/luci-app-timecontrol package/
+          # 更新 feeds 并安装依赖
           ./scripts/feeds update -a
           ./scripts/feeds install -a
-          make defconfig
+          # 编译插件
           make package/luci-app-timecontrol/compile V=s -j$(nproc)
 
-      - name: Upload IPK
-        uses: actions/upload-artifact@main
+      - name: Upload the IPK
+        uses: actions/upload-artifact@v4
         with:
           name: luci-app-timecontrol-ipk
-          path: immortalwrt/bin/packages/**/luci-app-timecontrol*.ipk
+          path: ${{ env.SDK_PATH }}/bin/packages/*/luci-app-timecontrol*.ipk
